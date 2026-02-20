@@ -1,0 +1,40 @@
+import { Injectable } from '@nestjs/common';
+import OpenAI from 'openai';
+import { Message } from '../messages/message.entity';
+
+@Injectable()
+export class AiService {
+  private openai: OpenAI;
+
+  constructor() {
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+
+  async chat(
+    messages: Message[],
+    params?: { stopSequence?: string[]; maxTokens?: number; n?: number; model?: string; temperature?: number },
+    systemPrompt?: string,
+  ): Promise<{ content: string; finishReason: string }[]> {
+    const systemMessage = systemPrompt
+      ? [{ role: 'system' as const, content: systemPrompt }]
+      : [];
+    const response = await this.openai.chat.completions.create({
+      model: params?.model ?? 'gpt-4o-mini',
+      messages: [
+        ...systemMessage,
+        ...messages.map((m) => ({ role: m.role, content: m.text })),
+      ],
+      ...(params?.stopSequence && { stop: params.stopSequence }),
+      ...(params?.maxTokens && { max_tokens: params.maxTokens }),
+      ...(params?.n && { n: params.n }),
+      ...(params?.temperature !== undefined && { temperature: params.temperature }),
+    });
+
+    return response.choices.map((choice) => ({
+      content: choice.message.content ?? '',
+      finishReason: choice.finish_reason,
+    }));
+  }
+}
